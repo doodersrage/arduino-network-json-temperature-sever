@@ -1,4 +1,4 @@
-|#Arduino networked dual temperature probe
+# Arduino networked dual temperature probe
 
 Arduino Uno, Arduino Ethernet Shield, 2x16 char LCD panel with pot for contrast, and dual averaged temperature probes with JSON formatted results. 
 
