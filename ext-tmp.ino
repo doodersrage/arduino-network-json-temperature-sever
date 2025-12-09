@@ -147,7 +147,7 @@ void loop()
   String messageF = String(temperatureFAVG) + " degrees F";
   lcd.print(messageF);
 
-  // delay for a seond then loop
+  // delay for a second then loop
   delay(1000);  
 
 }
