@@ -3,6 +3,7 @@
 #include <Ethernet.h>
 #include <LiquidCrystal.h>
 #include <ArduinoJson.h>
+#include <avr/wdt.h>
 
 // initial
 char c = 0;           // received data
@@ -50,6 +51,9 @@ void setup()
   // serial output
   Serial.begin(9600);  //Start the serial connection with the computer
                        //to view the result open the serial monitor  
+
+  wdt_enable(WDTO_8S); // Enable WDT with 8 seconds timeout
+
 }
  
 void loop()
@@ -62,10 +66,8 @@ void loop()
   int readingAVG = ((reading0 + reading1) / 2);
 
   // converting that reading to voltage, for 3.3v arduino use 3.3
-  float voltage0 = reading0 * 5.0;
-  voltage0 /= 1024.0;  
-  float voltage1 = reading1 * 5.0;
-  voltage1 /= 1024.0;  
+  float voltage0 = reading0 * (5.0 / 1024.0);
+  float voltage1 = reading1 * (5.0 / 1024.0);
 
   // now print out the temperature
   float temperatureC0 = (voltage0 - 0.5) * 100 ;  //converting from 10 mv per degree wit 500 mV offset
@@ -147,7 +149,9 @@ void loop()
   String messageF = String(temperatureFAVG) + " degrees F";
   lcd.print(messageF);
 
-  // delay for a second then loop
+  // delay for a seond then loop
   delay(1000);  
+
+  wdt_reset();
 
 }
