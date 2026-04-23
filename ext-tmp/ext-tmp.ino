@@ -109,6 +109,8 @@ void loop()
 
   // make ethernet sheild available
   EthernetClient client = server.available();
+  client.setTimeout(500);
+
   // detect if current is the first line
   boolean current_line_is_first = true;
 
@@ -163,9 +165,6 @@ void loop()
   lcd.setCursor(0,1);           // set cursor to column 0, row 1
   String messageF = String(temperatureFAVG) + " F " ;
   lcd.print(messageF);
-
-  // delay for a seond then loop
-  //delay(1000);  
 
   wdt_reset();
 
