@@ -71,7 +71,8 @@ void loop()
   float h2 = dht2.readHumidity();
   float t2 = dht2.readTemperature();
 
-  if (isnan(h1) || isnan(t1)) {
+  // check if sensors are available
+  if ((isnan(h1) || isnan(t1)) || (isnan(h2) || isnan(t2))) {
     Serial.println("Failed to read from DHT sensor!\n");
     return;
   }
