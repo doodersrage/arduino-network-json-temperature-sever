@@ -6,9 +6,12 @@
 #include <ArduinoJson.h>
 #include <avr/wdt.h>
 
+// dht pins assignment
 #define DHTPIN1 A4     // Digital pin connected to the DHT sensor
 #define DHTPIN2 A5     // Digital pin connected to the DHT sensor
+// dht type dht22 designation
 #define DHTTYPE DHT22
+// init dht AM2302 probes
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
@@ -16,7 +19,7 @@ DHT dht2(DHTPIN2, DHTTYPE);
 char c = 0;           // received data
 char command[2] = "\0";  // command
 
-// ethernet configuration
+// ethernet configuration -- this setting works for me, change to whatever works best for you
 byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDA, 0x02 };
 IPAddress arduinoIP(192, 168, 12, 111);
 IPAddress dnsIP(192, 168, 12, 8);
@@ -27,36 +30,37 @@ EthernetServer server(80);
 
 // LCD connections:
 LiquidCrystal lcd(8 ,9, A2, 5, 6, 3, A3);
-int backLight = 7;    // pin 13 will control the backlight
+int backLight = 7;    // pin 7 will control the backlight
  
 /*
  * setup() - this function runs once when you turn your Arduino on
  */
 void setup()
 {
-  // analoogue to digital pins
+  // analoogue to digital pin designations
   pinMode(A2, INPUT_PULLUP);      
   pinMode(A3, INPUT_PULLUP);      
   pinMode(A4, INPUT_PULLUP);      
   pinMode(A5, INPUT_PULLUP);      
 
-  // LCD panel 
+  // enable LCD panel 
   pinMode(backLight, OUTPUT);
   digitalWrite(backLight, HIGH); // turn backlight on. Replace 'HIGH' with 'LOW' to turn it off.
   lcd.begin(16,2);              // columns, rows.  use 16,2 for a 16x2 LCD, etc.
   lcd.clear();                  // start with a blank screen
   lcd.setCursor(0,0);           // set cursor to column 0, row 0 (the first row)
   
-  // ethernet shield
+  // enable ethernet shield
   Ethernet.begin(mac, arduinoIP, dnsIP, gatewayIP, subnetIP);
   server.begin();
 
-  // serial output
-  Serial.begin(9600);  //Start the serial connection with the computer
-                       //to view the result open the serial monitor  
+  //Start the serial connection with the computer
+  Serial.begin(9600);  
 
-  wdt_enable(WDTO_8S); // Enable WDT with 8 seconds timeout
+  // Enable watch dog timer with 8 seconds timeout
+  wdt_enable(WDTO_8S); 
 
+  // start AM2302 sensor readings
   dht1.begin();
   dht2.begin();
 }
@@ -66,8 +70,10 @@ void loop()
   delay(2000); 
 
   //get dht sensor data
+  // probe 0
   float h1 = dht1.readHumidity();
-  float t1 = dht1.readTemperature(); // Celsius
+  float t1 = dht1.readTemperature();
+  // probe 1
   float h2 = dht2.readHumidity();
   float t2 = dht2.readTemperature();
 
@@ -77,22 +83,22 @@ void loop()
     return;
   }
 
-  // now print out the temperature
+  // gather temperature data for output
   float temperatureC0 = t1;  //converting from 10 mv per degree wit 500 mV offset
   float temperatureC1 = t2;  
   float temperatureCAVG = ((temperatureC0 + temperatureC1) / 2);
                                                 //to degrees ((voltage - 500mV) times 100) 
-  // now convert to Fahrenheit
+  // now convert to c to Fahrenheit
   float temperatureF0 = (temperatureC0 * 9.0 / 5.0) + 32.0;
   float temperatureF1 = (temperatureC1 * 9.0 / 5.0) + 32.0;
   float temperatureFAVG = ((temperatureF0 + temperatureF1) / 2);
 
-  // now print out the temperature
+  // gather humidity data for output
   float humidity0 = h1;  //converting from 10 mv per degree wit 500 mV offset
   float humidity1 = h2;  
   float humidityAVG = ((humidity0 + humidity1) / 2);
 
-  // convert temp data to JSON
+  // store data in JSON
   JsonDocument doc;
   doc["temp"]["avg"]["c"] = temperatureCAVG;
   doc["temp"]["avg"]["f"] = temperatureFAVG;
@@ -167,6 +173,7 @@ void loop()
   String messageF = String(temperatureFAVG) + " F " ;
   lcd.print(messageF);
 
+  // reset watch dog timer
   wdt_reset();
 
 }
