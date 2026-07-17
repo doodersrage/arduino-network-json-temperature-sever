@@ -3,6 +3,7 @@
 Arduino Uno, Arduino Ethernet Shield, 2x16 char LCD panel with pot for contrast, and dual averaged temperature probes with JSON formatted results. 
 
 Uses libraries:\
+DHT sensor library\
 SPI.h\
 Ethernet.h\
 LiquidCrystal.h\

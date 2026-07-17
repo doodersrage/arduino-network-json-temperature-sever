@@ -15,9 +15,25 @@
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
 
-// initial
-char c = 0;           // received data
 char command[2] = "\0";  // command
+
+static const unsigned long CLIENT_TIMEOUT_MS = 3000;
+static const unsigned long DHT_INTERVAL_MS = 2000;
+
+unsigned long lastDhtReadMs = 0;
+float temperatureC0 = 0;
+float temperatureC1 = 0;
+float temperatureCAVG = 0;
+float temperatureF0 = 0;
+float temperatureF1 = 0;
+float temperatureFAVG = 0;
+float humidity0 = 0;
+float humidity1 = 0;
+float humidityAVG = 0;
+bool sensorsOk = false;
+char jsonOutput[256];
+char lcdLine0[17];
+char lcdLine1[17];
 
 // ethernet configuration -- this setting works for me, change to whatever works best for you
 byte mac[] = { 0x00, 0xAA, 0xBB, 0xCC, 0xDA, 0x02 };
@@ -31,6 +47,10 @@ EthernetServer server(80);
 // LCD connections:
 LiquidCrystal lcd(8 ,9, A2, 5, 6, 3, A3);
 int backLight = 7;    // pin 7 will control the backlight
+
+void readSensors();
+void handleClient();
+void updateDisplay();
  
 /*
  * setup() - this function runs once when you turn your Arduino on
@@ -63,42 +83,37 @@ void setup()
   // start AM2302 sensor readings
   dht1.begin();
   dht2.begin();
+  delay(DHT_INTERVAL_MS);
+  readSensors();
+  updateDisplay();
+  lastDhtReadMs = millis();
 }
- 
-void loop()
-{
-  delay(2000); 
 
-  //get dht sensor data
-  // probe 0
+void readSensors()
+{
   float h1 = dht1.readHumidity();
   float t1 = dht1.readTemperature();
-  // probe 1
   float h2 = dht2.readHumidity();
   float t2 = dht2.readTemperature();
 
-  // check if sensors are available
-  if ((isnan(h1) || isnan(t1)) || (isnan(h2) || isnan(t2))) {
-    Serial.println("Failed to read from DHT sensor!\n");
+  sensorsOk = !(isnan(h1) || isnan(t1) || isnan(h2) || isnan(t2));
+  if (!sensorsOk) {
+    Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
 
-  // gather temperature data for output
-  float temperatureC0 = t1;  //converting from 10 mv per degree wit 500 mV offset
-  float temperatureC1 = t2;  
-  float temperatureCAVG = ((temperatureC0 + temperatureC1) / 2);
-                                                //to degrees ((voltage - 500mV) times 100) 
-  // now convert to c to Fahrenheit
-  float temperatureF0 = (temperatureC0 * 9.0 / 5.0) + 32.0;
-  float temperatureF1 = (temperatureC1 * 9.0 / 5.0) + 32.0;
-  float temperatureFAVG = ((temperatureF0 + temperatureF1) / 2);
+  temperatureC0 = t1;
+  temperatureC1 = t2;
+  temperatureCAVG = (temperatureC0 + temperatureC1) / 2.0;
 
-  // gather humidity data for output
-  float humidity0 = h1;  //converting from 10 mv per degree wit 500 mV offset
-  float humidity1 = h2;  
-  float humidityAVG = ((humidity0 + humidity1) / 2);
+  temperatureF0 = (temperatureC0 * 9.0 / 5.0) + 32.0;
+  temperatureF1 = (temperatureC1 * 9.0 / 5.0) + 32.0;
+  temperatureFAVG = (temperatureF0 + temperatureF1) / 2.0;
 
-  // store data in JSON
+  humidity0 = h1;
+  humidity1 = h2;
+  humidityAVG = (humidity0 + humidity1) / 2.0;
+
   JsonDocument doc;
   doc["temp"]["avg"]["c"] = temperatureCAVG;
   doc["temp"]["avg"]["f"] = temperatureFAVG;
@@ -109,71 +124,93 @@ void loop()
   doc["temp"]["1"]["c"] = temperatureC1;
   doc["temp"]["1"]["f"] = temperatureF1;
   doc["temp"]["1"]["h"] = humidity1;
+  serializeJson(doc, jsonOutput);
 
-  // serialize json data
-  char output[256];
-  serializeJson(doc, output);
+  char tempC[8];
+  char hum[8];
+  char tempF[8];
+  dtostrf(temperatureCAVG, 0, 1, tempC);
+  dtostrf(humidityAVG, 0, 1, hum);
+  dtostrf(temperatureFAVG, 0, 1, tempF);
+  snprintf(lcdLine0, sizeof(lcdLine0), "%s C Hum %s", tempC, hum);
+  snprintf(lcdLine1, sizeof(lcdLine1), "%s F", tempF);
+}
 
-  // make ethernet sheild available
+void handleClient()
+{
   EthernetClient client = server.available();
+  if (!client) {
+    return;
+  }
+
   client.setTimeout(500);
-
-  // detect if current is the first line
+  unsigned long deadline = millis() + CLIENT_TIMEOUT_MS;
   boolean current_line_is_first = true;
+  boolean current_line_is_blank = true;
 
-  // check for client, print found temp data
- if (client) {
-    // an http request ends with a blank line
-    boolean current_line_is_blank = true;
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        // if we've gotten to the end of the line (received a newline
-        // character) and the line is blank, the http request has ended,
-        // so we can send a reply
-        if (c == '\n' && current_line_is_blank) {
-          // send a standard http response header
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-Type: application/json");
-          client.println();
-          
-          // webpage title
-          client.println(output);
-                    
-          break;
-        }
-        if (c == '\n') {
-          // we're starting a new line
-          current_line_is_first = false;
-          current_line_is_blank = true;
-        } 
-        else if (c != '\r') {
-          // we've gotten a character on the current line
-          current_line_is_blank = false;
-        }
-        // get the first http request
-        if (current_line_is_first && c == '=') {
-          for (int i = 0; i < 1; i++) {
-            c = client.read();
-            command[i] = c;
-          }
-        }
-      }
+  while (client.connected() && millis() < deadline) {
+    wdt_reset();
+
+    if (!client.available()) {
+      delay(1);
+      continue;
     }
-    // give the web browser time to receive the data
-    delay(1);
-    client.stop();
-  }                                 //waiting a second
 
-  // print temp data to LCD
-  String messageC = String(temperatureCAVG) + " C Hum " + String(humidityAVG);
-  lcd.setCursor(0,0);
-  lcd.print(messageC);    // change text to whatever you like. keep it clean!
-  lcd.setCursor(0,1);           // set cursor to column 0, row 1
-  String messageF = String(temperatureFAVG) + " F " ;
-  lcd.print(messageF);
+    char c = client.read();
+    if (c == '\n' && current_line_is_blank) {
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: application/json");
+      client.println();
+      if (sensorsOk) {
+        client.println(jsonOutput);
+      } else {
+        client.println("{\"error\":\"sensor read failed\"}");
+      }
+      break;
+    }
 
-  // reset watch dog timer
+    if (c == '\n') {
+      current_line_is_first = false;
+      current_line_is_blank = true;
+    } else if (c != '\r') {
+      current_line_is_blank = false;
+    }
+
+    if (current_line_is_first && c == '=' && client.available()) {
+      command[0] = client.read();
+      command[1] = '\0';
+    }
+  }
+
+  client.flush();
+  client.stop();
+}
+
+void updateDisplay()
+{
+  lcd.setCursor(0, 0);
+  if (sensorsOk) {
+    lcd.print(lcdLine0);
+    lcd.setCursor(0, 1);
+    lcd.print(lcdLine1);
+  } else {
+    lcd.print(F("Sensor error"));
+    lcd.setCursor(0, 1);
+    lcd.print(F("Check DHT22"));
+  }
+}
+
+void loop()
+{
   wdt_reset();
 
+  unsigned long now = millis();
+  if (now - lastDhtReadMs >= DHT_INTERVAL_MS) {
+    lastDhtReadMs = now;
+    readSensors();
+    updateDisplay();
+  }
+
+  handleClient();
+  wdt_reset();
 }
