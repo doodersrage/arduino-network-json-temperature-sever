@@ -9,4 +9,4 @@ Ethernet.h\
 LiquidCrystal.h\
 ArduinoJson.h   (https://docs.arduino.cc/libraries/arduinojson/)
 
-Will add wireing diagram at some point. 
+Will add wiring diagram at some point. 
